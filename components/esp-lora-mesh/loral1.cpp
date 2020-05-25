@@ -32,7 +32,7 @@ int LoraL1::begin(spi_host_device_t  spi_id)
   spi_device_interface_config_t dev = {};
   dev.clock_speed_hz = 9000000;
   dev.mode = 0;
-  dev.spics_io_num = -1;
+  dev.spics_io_num = _csPin;
   dev.queue_size = 1;
   dev.flags = 0;
   dev.pre_cb = NULL;
@@ -147,9 +147,7 @@ void LoraL1::writeRegister(uint8_t reg,uint8_t val)
   t.tx_buffer = out;
   t.rx_buffer = in;
 
-  gpio_set_level(_csPin,0);
   spi_device_transmit(_spi, &t);
-  gpio_set_level(_csPin,1);
 }
 
 uint8_t LoraL1::readRegister(uint8_t reg)
@@ -163,9 +161,7 @@ uint8_t LoraL1::readRegister(uint8_t reg)
   t.tx_buffer = out;
   t.rx_buffer = in;
 
-  gpio_set_level(_csPin,0);
   spi_device_transmit(_spi, &t);
-  gpio_set_level(_csPin,1);
   return in[1]; 
 }
 

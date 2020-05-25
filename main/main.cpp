@@ -42,9 +42,7 @@ void app_main(void)
   {
     int len = sprintf((char*)buf,"long msg over lora %i",counter++);
     vTaskDelay(pdMS_TO_TICKS(100));
-    ESP_LOGI(TAG,"Trying to send packet...");
     _loraL1.sendPacket(buf,len);
-    ESP_LOGI(TAG,"Tried to send packet...");
   }
 #else
   uint8_t buf[255];
