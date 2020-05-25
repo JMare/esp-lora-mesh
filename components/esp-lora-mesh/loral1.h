@@ -3,13 +3,14 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 
 class LoraL1 {
 public:
-  LoraL1(gpio_num_t rst_pin, gpio_num_t cs_pin, long freq);
+  LoraL1(gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin, long freq);
 
   int begin(spi_host_device_t spi_id);
 
@@ -56,7 +57,9 @@ public:
 private:
   void explicitHeaderMode();
 
-  void handleDio0Rise();
+  static void IRAM_ATTR handleDio0Rise(void *args);
+  static void loraTask(void *args);
+
   bool isTransmitting();
 
   int getSpreadingFactor();
@@ -68,13 +71,13 @@ private:
   void writeRegister(uint8_t reg, uint8_t val);
   uint8_t singleTransfer(uint8_t address, uint8_t value);
 
-  static void onDio0Rise();
-
 private:
   spi_device_handle_t _spi;
   long _frequency;
   gpio_num_t _rstPin;
   gpio_num_t _csPin;
+  gpio_num_t _dio0Pin;
+
 };
 
 #endif

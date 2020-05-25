@@ -6,13 +6,32 @@
 #define BITREAD(x,y) ((0u == (x & (1<<y)))?0u:1u)
 #define BITTOGGLE(x,y) (x ^= (1<<y))
 
+#define ESP_INTR_FLAG_DEFAULT 0
+
 static const char* TAG = "LORA L1";
 
-LoraL1::LoraL1(gpio_num_t rst_pin, gpio_num_t cs_pin, long freq) :
+SemaphoreHandle_t _dio0Semaphore = NULL;
+
+LoraL1::LoraL1(gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin, long freq) :
   _frequency(freq),
   _rstPin(rst_pin),
-  _csPin(cs_pin)
+  _csPin(cs_pin),
+  _dio0Pin(dio0_pin)
 {
+}
+
+void IRAM_ATTR LoraL1::handleDio0Rise(void *args)
+{
+  xSemaphoreGiveFromISR(_dio0Semaphore,NULL);
+}
+
+void LoraL1::loraTask(void *args)
+{
+  while(1)
+  {
+    if(xSemaphoreTake(_dio0Semaphore,portMAX_DELAY) == pdTRUE)
+      ESP_LOGI(TAG,"Got a DIO_0 ISR");
+  }
 }
 
 // we do nothing until the begin function is called to give user time to setup spi bus.
@@ -27,6 +46,20 @@ int LoraL1::begin(spi_host_device_t  spi_id)
   gpio_set_direction(this->_rstPin, GPIO_MODE_OUTPUT);
   gpio_pad_select_gpio(this->_csPin);
   gpio_set_direction(this->_csPin, GPIO_MODE_OUTPUT);
+  gpio_pad_select_gpio(this->_dio0Pin);
+  gpio_set_direction(this->_dio0Pin, GPIO_MODE_INPUT);
+
+  ret = gpio_set_intr_type(this->_dio0Pin,GPIO_INTR_POSEDGE);
+  ESP_ERROR_CHECK(ret);
+  gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
+
+  gpio_isr_handler_add(_dio0Pin, handleDio0Rise,NULL);
+
+  _dio0Semaphore = xSemaphoreCreateBinary();
+
+  //start the task to monitor for isr generated semaphores
+  TaskHandle_t loraTask_handle = NULL;
+  xTaskCreate(&loraTask,"loraTask",2048,NULL,5,&loraTask_handle);
 
   //the bus should already be initialized by the user, so try to attach this device to it
   spi_device_interface_config_t dev = {};
@@ -202,6 +235,7 @@ int LoraL1::available()
 
 void LoraL1::receive()
 {
+  this->writeRegister(REG_DIO_MAPPING_1,0x00); // RXDONE
   this->writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_RX_CONTINUOUS);
 }
 

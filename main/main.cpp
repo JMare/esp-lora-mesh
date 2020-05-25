@@ -8,7 +8,7 @@
 
 static const char* TAG = "MAIN";
 
-LoraL1 _loraL1((gpio_num_t)14,(gpio_num_t)18,915e6);
+LoraL1 _loraL1((gpio_num_t)14,(gpio_num_t)18,(gpio_num_t)26,915e6);
 
 extern "C" {
   void app_main(void);
@@ -32,7 +32,6 @@ void app_main(void)
   ESP_LOGI(TAG,"VSPI Initialized");
 
   _loraL1.begin(VSPI_HOST);
-  _loraL1.setFrequency(915e6);
   _loraL1.enableCrc();
 
 #ifdef SENDER
