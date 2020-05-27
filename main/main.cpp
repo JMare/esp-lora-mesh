@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "lora_driver.h"
+#include "lora_tdm.h"
 
 //#define SENDER
 
@@ -31,7 +32,7 @@ void app_main(void)
   ESP_LOGI(TAG,"MAIN ENTRY");
   spi_init();
 
-  loraSetPins((gpio_num_t)14,(gpio_num_t)18,(gpio_num_t)26,915e6);
-  loraBegin(VSPI_HOST);
-  loraEnableCrc();
+  // Configure the driver with appropriate pins
+  loraSetPins(VSPI_HOST,(gpio_num_t)14,(gpio_num_t)18,(gpio_num_t)26);
+  loraTDMStart();
 }

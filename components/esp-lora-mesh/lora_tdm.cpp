@@ -14,11 +14,14 @@ QueueHandle_t qTDMEvent=NULL;
 bool tdm_lock;
 uint8_t current_slot_number;
 
+void IRAM_ATTR dio0_isr(void *para)
+{
+  
+}
 
 void IRAM_ATTR slot_timer_isr(void *para)
 {
   timer_spinlock_take(TIMER_GROUP_0);
-
 
   TDMEventType tdm_event = TDM_EVENT_SLOT_END;
   xQueueSend(qTDMEvent,&tdm_event,(TickType_t)0);
@@ -52,12 +55,23 @@ void slot_timer_init()
   timer_start(TIMER_GROUP_0,TIMER_0);
 }
 
-void loraTDMTask(void *args)
+void loraTDMStart()
 {
   qTDMEvent = xQueueCreate(1,sizeof(TDMEventType));
   slot_timer_init();
   tdm_lock = true; //not really but lets pretend
   current_slot_number = 0;
+
+  loraRegisterISR(&dio0_isr);
+  loraBegin();
+  loraTDMConfigureRadio();
+
+  TaskHandle_t loraTDMTask_handle = NULL;
+  xTaskCreate(&loraTDMTask,"LoRa TDM Task",3096,NULL,5,&loraTDMTask_handle);
+}
+
+void loraTDMTask(void *args)
+{
 
   while(true)
   {
@@ -86,6 +100,13 @@ void loraTDMTask(void *args)
   }
 }
 
+void loraTDMConfigureRadio()
+{
+  loraSetFrequency(915e6);
+  loraSetSignalBandwidth(500E3);
+  loraSetSpreadingFactor(8);
+  loraSetTxPower(14);
+}
 /*
  * Sync Packet: send at the start of each slot, contains window and syncronization details
  * Startup: Receive until we see a SYNC packet (perhaps multiple that align?)

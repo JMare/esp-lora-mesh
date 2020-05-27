@@ -21,5 +21,7 @@ enum TDMEventType {
 };
 
 void loraTDMTask(void *args);
+void loraTDMStart();
+void loraTDMConfigureRadio();
 
 #endif
