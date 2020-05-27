@@ -13,27 +13,29 @@ static const char* TAG = "LORA L1";
 
 SemaphoreHandle_t _dio0Semaphore = NULL;
 
+void (*dio0_isr)(void*) = NULL;
+
+spi_host_device_t _spi_id;
 spi_device_handle_t _spi;
 long _frequency;
 gpio_num_t _rstPin;
 gpio_num_t _csPin;
 gpio_num_t _dio0Pin;
 
-void loraSetPins(gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin, long freq)
+void loraSetPins(spi_host_device_t spi_id, gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin)
 {
-  _frequency =freq;
+  _spi_id = spi_id;
   _rstPin = rst_pin;
   _csPin = cs_pin;
   _dio0Pin = dio0_pin;
 }
 
-void IRAM_ATTR handleDio0Rise(void *args)
+void loraRegisterISR(void (*isr_fun)(void*))
 {
-  xSemaphoreGiveFromISR(_dio0Semaphore,NULL);
+  dio0_isr = isr_fun;
 }
-
 // we do nothing until the begin function is called to give user time to setup spi bus.
-int loraBegin(spi_host_device_t  spi_id)
+int loraBegin()
 {
   ESP_LOGI(TAG,"Lora Begin");
   // Store a ref to the spi device
@@ -47,17 +49,16 @@ int loraBegin(spi_host_device_t  spi_id)
   gpio_pad_select_gpio(_dio0Pin);
   gpio_set_direction(_dio0Pin, GPIO_MODE_INPUT);
 
-  ret = gpio_set_intr_type(_dio0Pin,GPIO_INTR_POSEDGE);
-  ESP_ERROR_CHECK(ret);
-  gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
-
-  gpio_isr_handler_add(_dio0Pin, handleDio0Rise,NULL);
+  if(dio0_isr != NULL)
+  {
+    ret = gpio_set_intr_type(_dio0Pin,GPIO_INTR_POSEDGE);
+    ESP_ERROR_CHECK(ret);
+    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
+    gpio_isr_handler_add(_dio0Pin, dio0_isr,NULL);
+  }
 
   _dio0Semaphore = xSemaphoreCreateBinary();
 
-  //start the task to monitor for isr generated semaphores
-  TaskHandle_t loraTask_handle = NULL;
-  xTaskCreate(&loraTDMTask,"loraTask",2048,NULL,5,&loraTask_handle);
 
   //the bus should already be initialized by the user, so try to attach this device to it
   spi_device_interface_config_t dev = {};
@@ -68,7 +69,7 @@ int loraBegin(spi_host_device_t  spi_id)
   dev.flags = 0;
   dev.pre_cb = NULL;
 
-  ret = spi_bus_add_device(spi_id, &dev, &_spi);
+  ret = spi_bus_add_device(_spi_id, &dev, &_spi);
   assert(ret == ESP_OK);
   ESP_LOGI(TAG,"Device added to bus");
 
@@ -87,9 +88,6 @@ int loraBegin(spi_host_device_t  spi_id)
   // put in sleep mode
   loraSleep();
 
-  // set frequency
-  loraSetFrequency(_frequency);
-
   // set base addresses
   loraWriteRegister(REG_FIFO_TX_BASE_ADDR, 0);
   loraWriteRegister(REG_FIFO_RX_BASE_ADDR, 0);
@@ -99,9 +97,6 @@ int loraBegin(spi_host_device_t  spi_id)
 
   // set auto AGC
   loraWriteRegister(REG_MODEM_CONFIG_3, 0x04);
-
-  // set output power to 17 dBm
-  loraSetTxPower(17);
 
   // put in standby mode
   loraIdle();
@@ -316,6 +311,8 @@ long loraGetSignalBandwidth()
 
 void loraSetSignalBandwidth(long sbw)
 {
+  ESP_LOGI(TAG,"Setting signal bandwidth to %ld",sbw);
+
   int bw;
 
   if (sbw <= 7.8E3) {

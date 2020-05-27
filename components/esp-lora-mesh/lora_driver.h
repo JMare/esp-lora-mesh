@@ -10,9 +10,11 @@
 
 extern SemaphoreHandle_t _dio0Semaphore;
 
-void loraSetPins(gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin, long freq);
+void loraSetPins(spi_host_device_t spi_id, gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin);
 
-int loraBegin(spi_host_device_t spi_id);
+void loraRegisterISR(void (*isr_fun)(void*));
+
+int loraBegin();
 
 int loraPacketRssi();
 float loraPacketSnr();
