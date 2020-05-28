@@ -16,7 +16,8 @@ uint8_t current_slot_number;
 
 void IRAM_ATTR dio0_isr(void *para)
 {
-  
+  TDMEventType tdm_event = TDM_EVENT_DIO_IRQ;
+  xQueueSend(qTDMEvent,&tdm_event,(TickType_t)0);
 }
 
 void IRAM_ATTR slot_timer_isr(void *para)
@@ -62,6 +63,7 @@ void loraTDMStart()
   tdm_lock = true; //not really but lets pretend
   current_slot_number = 0;
 
+  // we must register the ISR before we call begin or it will not get called
   loraRegisterISR(&dio0_isr);
   loraBegin();
   loraTDMConfigureRadio();
@@ -88,24 +90,33 @@ void loraTDMTask(void *args)
 
         if(current_slot_number == TDM_THIS_SLOT_ID)
         {
-          ESP_LOGI(TAG,"This is our slot, transmit");
+          SyncMessage msg = {};
+          msg.slot_number = TDM_THIS_SLOT_ID;
+
+          long airtime = loraCalculateAirtime(5,LORA_SF,true, 0, LORA_CR_DEN, LORA_BW);
+          uint64_t next_alarm;
+          uint64_t now_counter;
+          timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);
+          timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
+          msg.micros_to_slot_end = next_alarm - now_counter - airtime;
+          ESP_LOGI(TAG,"Slot Ends in %d",msg.micros_to_slot_end);
+          uint8_t buf[LORA_MAX_MESSAGE_LEN];
+          int len = msg.pack(buf);
+          loraSendPacket(buf,len);
         }
       }
     }
-
-    //vTaskDelay(1000/portTICK_PERIOD_MS);
-    //uint64_t time_to_slot_end;
-    //timer_get_counter_value(TIMER_GROUP_0, TIMER_0,&time_to_slot_end);
-    //ESP_LOGI(TAG,"Timer Val %lld",time_to_slot_end);
   }
 }
 
 void loraTDMConfigureRadio()
 {
-  loraSetFrequency(915e6);
-  loraSetSignalBandwidth(500E3);
-  loraSetSpreadingFactor(8);
-  loraSetTxPower(14);
+  loraSetFrequency(LORA_FREQ);
+  loraSetSignalBandwidth(LORA_BW);
+  loraSetSpreadingFactor(LORA_SF);
+  loraSetTxPower(LORA_TX_PWR);
+  loraExplicitHeaderMode();
+  loraSetCodingRate4(LORA_CR_DEN);
 }
 /*
  * Sync Packet: send at the start of each slot, contains window and syncronization details

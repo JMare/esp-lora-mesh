@@ -48,6 +48,7 @@ void loraSetLdoFlag();
 void loraSetOCP(uint8_t mA); // Over Current Protection control
 uint8_t loraRandom();
 void loraExplicitHeaderMode();
+long loraCalculateAirtime(int length, int spreadingFactor, bool explicitHeader, int lowDR, int codingRate, long bandwidth);
 
 uint8_t loraReadRegister(uint8_t reg);
 void loraWriteRegister(uint8_t reg, uint8_t val);

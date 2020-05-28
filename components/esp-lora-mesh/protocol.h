@@ -7,6 +7,12 @@
 #define PACKET_HEADER_SIZE 2
 #define LORA_MAX_MESSAGE_LEN LORA_MAX_PACKET_SIZE-PACKET_HEADER_SIZE
 
+#define LORA_FREQ 915e6
+#define LORA_BW 500e3
+#define LORA_SF 8
+#define LORA_TX_PWR 14
+#define LORA_CR_DEN 5
+
 // Virtual class for message
 class Message {
  public:
