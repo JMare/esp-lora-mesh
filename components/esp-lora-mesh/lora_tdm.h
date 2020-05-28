@@ -11,6 +11,8 @@
 // Timing defines
 #define TDM_SLOT_WIDTH_MICROS 1000000 //1s
 #define TDM_SLOT_GUARD_MICROS 100000 //100ms
+#define TDM_USABLE_SLOT TDM_SLOT_WIDTH_MICROS - TDM_SLOT_GUARD_MICROS
+#define TDM_LISTEN_MS 10000
 #define TDM_NUM_SLOTS 3
 
 #define TIMER_DIVIDER 80 // Divide 80mhz to 1mhz = 1us clicks
@@ -28,8 +30,22 @@ enum TDMEventType {
   TDM_EVENT_SLOT_END
 };
 
+enum TDMState {
+  TDM_STATE_LISTEN, // waiting for a tdm to lock on to
+  TDM_STATE_LOCKING, // we have found a tdm schedule to lock to, but we should wait till the next slot
+  TDM_STATE_TRANSMIT,
+  TDM_STATE_RECEIVE
+};
+
 void loraTDMTask(void *args);
 void loraTDMStart();
 void loraTDMConfigureRadio();
+void loraTDMStateMachine();
+void loraTDMListen();
+void loraTDMLocking();
+void loraTDMNextSlot();
+void loraTDMReceive();
+void loraTDMTransmit();
+void loraTDMWaitForNextSlot();
 
 #endif

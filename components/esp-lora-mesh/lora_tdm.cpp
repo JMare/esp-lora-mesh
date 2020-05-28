@@ -12,6 +12,7 @@ uint32_t slot_ends[TDM_NUM_SLOTS];
 
 QueueHandle_t qTDMEvent=NULL;
 
+TDMState tdm_state;
 bool tdm_lock;
 uint8_t current_slot_number;
 
@@ -73,31 +74,137 @@ void loraTDMStart()
 
 void loraTDMTask(void *args)
 {
-  //timer_start(TIMER_GROUP_0,TIMER_0); //not yet
 
   while(true)
   {
-    loraReceive();
-    TDMEventType tdm_event;
-    if(xQueueReceive(qTDMEvent,&tdm_event,(TickType_t)100))
-    {
-      if(tdm_event == TDM_EVENT_DIO_IRQ)
-      {
-        ESP_LOGI(TAG,"Got a packet bro");
-
-        // Clear IRQs so we dont miss the next one
-        uint8_t buf[LORA_MAX_MESSAGE_LEN];
-        int len = loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
-
-        SyncMessage msg;
-        msg.unpack(buf);
-
-        ESP_LOGI(TAG,"Got a sync message, len %i : currslot: %i , microstill %i",len, msg.slot_number,msg.micros_to_slot_end);
-      }
-    }
+    loraTDMStateMachine();
   }
 }
 
+void loraTDMStateMachine()
+{
+  // each state function must return before the end of the slot
+  // this means we will be blocking here when the next slot starts
+  // the lora radio should be put in idle so we wont get any stray interrupts
+
+  // If we dont have lock then we need to go direct to loraTDMListen() since the timer isnt running
+  if(tdm_state != TDM_STATE_LISTEN)
+    loraTDMWaitForNextSlot();
+
+  switch(tdm_state)
+  {
+  case TDM_STATE_LISTEN:
+    loraTDMListen();
+    break;
+
+  case TDM_STATE_LOCKING:
+    loraTDMLocking();
+    break;
+  case TDM_STATE_TRANSMIT:
+    loraTDMTransmit();
+    break;
+
+  case TDM_STATE_RECEIVE:
+    loraTDMReceive();
+    break;
+
+  default:
+    break;
+  }
+}
+
+void loraTDMWaitForNextSlot()
+{
+  TDMEventType tdm_event;
+  if(xQueueReceive(qTDMEvent,&tdm_event,10000/portTICK_PERIOD_MS))
+    {
+      if(tdm_event != TDM_EVENT_SLOT_END)
+        ESP_LOGE(TAG,"We were pending for a TDM_EVENT_SLOT_END but got something else, this is bad");
+    }
+}
+
+void loraTDMListen()
+{
+  loraReceive();
+  TDMEventType tdm_event;
+  if(xQueueReceive(qTDMEvent,&tdm_event,TDM_LISTEN_MS / portTICK_PERIOD_MS))
+  {
+    if(tdm_event == TDM_EVENT_DIO_IRQ)
+      {
+        // Clear IRQs so we dont miss the next one
+        uint8_t buf[LORA_MAX_MESSAGE_LEN];
+        int len = loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
+        SyncMessage msg;
+        msg.unpack(buf);
+        ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg.slot_number);
+        timer_set_counter_value(TIMER_GROUP_0,TIMER_0,msg.micros_to_slot_end);
+        timer_start(TIMER_GROUP_0,TIMER_0);
+
+        // any sync message we rx means we must be in someone elses slot, go to rx
+        current_slot_number = msg.slot_number;
+        tdm_state = TDM_STATE_LOCKING;
+      }
+  }
+  else
+  {
+    // We didnt hear anything, we have to start our own tdm timing and reenter the loop
+    ESP_LOGI(TAG,"TDM Listen Timeout, setting our own timing");
+    timer_start(TIMER_GROUP_0,TIMER_0);
+    current_slot_number = 0;
+    tdm_state = TDM_STATE_LOCKING;
+  }
+  loraIdle();
+}
+
+void loraTDMLocking()
+{
+  ESP_LOGI(TAG,"TDM Locking on");
+  loraTDMNextSlot();
+}
+
+void loraTDMReceive()
+{
+  loraReceive();
+  TDMEventType tdm_event;
+  if(xQueueReceive(qTDMEvent,&tdm_event,(TDM_USABLE_SLOT/1000) / portTICK_PERIOD_MS))
+    {
+      if(tdm_event == TDM_EVENT_DIO_IRQ)
+        {
+          // Clear IRQs so we dont miss the next one
+          uint8_t buf[LORA_MAX_MESSAGE_LEN];
+          int len = loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
+          SyncMessage msg;
+          msg.unpack(buf);
+          ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg.slot_number);
+        }
+    }
+  loraIdle();
+  loraTDMNextSlot();
+}
+
+void loraTDMTransmit()
+{
+  ESP_LOGI(TAG,"This is our TX Window, Transmitting");
+  loraTDMNextSlot();
+}
+
+void loraTDMNextSlot()
+{
+  current_slot_number++;
+  if(current_slot_number == TDM_NUM_SLOTS)
+    current_slot_number = 0;
+
+  if(current_slot_number == TDM_THIS_SLOT_ID)
+  {
+    tdm_state = TDM_STATE_TRANSMIT;
+    ESP_LOGI(TAG,"TDM Tx Slot %i",current_slot_number);
+  }
+  else
+  {
+    tdm_state = TDM_STATE_RECEIVE;
+    ESP_LOGI(TAG,"TDM Rx Slot %i",current_slot_number);
+  }
+}
 
 /*
 void loraTDMTask(void *args)
