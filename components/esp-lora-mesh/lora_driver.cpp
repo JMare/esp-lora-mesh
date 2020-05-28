@@ -10,7 +10,7 @@
 
 #define ESP_INTR_FLAG_DEFAULT 0
 
-static const char* TAG = "LORA L1";
+static const char* TAG = "LORA DRIVER";
 
 SemaphoreHandle_t _dio0Semaphore = NULL;
 

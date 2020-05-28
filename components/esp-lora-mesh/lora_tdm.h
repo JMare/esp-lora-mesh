@@ -6,7 +6,7 @@
 
 // What are we
 #define MASTER
-#define TDM_THIS_SLOT_ID 0
+#define TDM_THIS_SLOT_ID 1
 
 // Timing defines
 #define TDM_SLOT_WIDTH_MICROS 1000000 //1s

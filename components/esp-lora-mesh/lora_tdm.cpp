@@ -1,5 +1,6 @@
 #include <lora_tdm.h>
 #include <lora_driver.h>
+#include <lora_constants.h>
 #include <protocol.h>
 
 #include "driver/timer.h"
@@ -52,8 +53,6 @@ void slot_timer_init()
   timer_set_alarm_value(TIMER_GROUP_0,TIMER_0,0);
   timer_enable_intr(TIMER_GROUP_0,TIMER_0);
   timer_isr_register(TIMER_GROUP_0,TIMER_0,slot_timer_isr,(void *) TIMER_0,ESP_INTR_FLAG_IRAM,NULL);
-
-  timer_start(TIMER_GROUP_0,TIMER_0);
 }
 
 void loraTDMStart()
@@ -72,6 +71,35 @@ void loraTDMStart()
   xTaskCreate(&loraTDMTask,"LoRa TDM Task",3096,NULL,5,&loraTDMTask_handle);
 }
 
+void loraTDMTask(void *args)
+{
+  //timer_start(TIMER_GROUP_0,TIMER_0); //not yet
+
+  while(true)
+  {
+    loraReceive();
+    TDMEventType tdm_event;
+    if(xQueueReceive(qTDMEvent,&tdm_event,(TickType_t)100))
+    {
+      if(tdm_event == TDM_EVENT_DIO_IRQ)
+      {
+        ESP_LOGI(TAG,"Got a packet bro");
+
+        // Clear IRQs so we dont miss the next one
+        uint8_t buf[LORA_MAX_MESSAGE_LEN];
+        int len = loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
+
+        SyncMessage msg;
+        msg.unpack(buf);
+
+        ESP_LOGI(TAG,"Got a sync message, len %i : currslot: %i , microstill %i",len, msg.slot_number,msg.micros_to_slot_end);
+      }
+    }
+  }
+}
+
+
+/*
 void loraTDMTask(void *args)
 {
 
@@ -108,6 +136,7 @@ void loraTDMTask(void *args)
     }
   }
 }
+*/
 
 void loraTDMConfigureRadio()
 {
@@ -117,6 +146,7 @@ void loraTDMConfigureRadio()
   loraSetTxPower(LORA_TX_PWR);
   loraExplicitHeaderMode();
   loraSetCodingRate4(LORA_CR_DEN);
+  loraEnableCrc();
 }
 /*
  * Sync Packet: send at the start of each slot, contains window and syncronization details
