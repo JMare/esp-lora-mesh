@@ -16,6 +16,9 @@ TDMState tdm_state;
 bool tdm_lock;
 uint8_t current_slot_number;
 
+const gpio_num_t slotPin = (gpio_num_t)17;
+volatile bool slotOutput = false;
+
 void IRAM_ATTR dio0_isr(void *para)
 {
   TDMEventType tdm_event = TDM_EVENT_DIO_IRQ;
@@ -24,6 +27,9 @@ void IRAM_ATTR dio0_isr(void *para)
 
 void IRAM_ATTR slot_timer_isr(void *para)
 {
+  gpio_set_level(slotPin,slotOutput);
+  slotOutput = !slotOutput;
+
   timer_spinlock_take(TIMER_GROUP_0);
 
   TDMEventType tdm_event = TDM_EVENT_SLOT_END;
@@ -41,6 +47,9 @@ void IRAM_ATTR slot_timer_isr(void *para)
 
 void slot_timer_init()
 {
+  gpio_pad_select_gpio(slotPin);
+  gpio_set_direction(slotPin, GPIO_MODE_OUTPUT);
+
   timer_config_t config = {};
   config.divider = TIMER_DIVIDER;
   config.counter_dir = TIMER_COUNT_UP;
@@ -137,7 +146,9 @@ void loraTDMListen()
         SyncMessage msg;
         msg.unpack(buf);
         ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg.slot_number);
-        timer_set_counter_value(TIMER_GROUP_0,TIMER_0,msg.micros_to_slot_end);
+        uint64_t now_timer;
+        timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_timer);
+        timer_set_alarm_value(TIMER_GROUP_0,TIMER_0,now_timer + msg.micros_to_slot_end);
         timer_start(TIMER_GROUP_0,TIMER_0);
 
         // any sync message we rx means we must be in someone elses slot, go to rx
@@ -165,6 +176,7 @@ void loraTDMLocking()
 void loraTDMReceive()
 {
   loraReceive();
+
   TDMEventType tdm_event;
   if(xQueueReceive(qTDMEvent,&tdm_event,(TDM_USABLE_SLOT/1000) / portTICK_PERIOD_MS))
     {
@@ -202,19 +214,11 @@ void loraTDMTransmit()
   timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
   msg.micros_to_slot_end = next_alarm - now_counter - airtime;
 
-  ESP_LOGI(TAG,"Alleged Airtime %ld",airtime);
   uint8_t buf[LORA_MAX_MESSAGE_LEN];
   int len = msg.pack(buf);
 
-  uint64_t startsend;
-  uint64_t endsend;
-  timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&startsend);
   loraSendPacket(buf,len);
-  timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&endsend);
-
-  long real_airtime = endsend-startsend;
-  ESP_LOGI(TAG,"Real Airtime %lu",real_airtime);
-  loraSendPacket(buf,len);
+  loraIdle();
 
   loraTDMNextSlot();
 }
