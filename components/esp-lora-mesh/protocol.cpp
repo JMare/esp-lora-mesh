@@ -9,7 +9,7 @@ int Packet::pack(uint8_t *buf)
   buf[3] = msg_id;
 
   // call msg.pack to fill the rest of the buffer
-  int msg_len = this->msg.pack(&buf,PACKET_HEADER_SIZE);
+  int msg_len = this->msg.pack(buf,PACKET_HEADER_SIZE);
 
   // Return total length of header + message
   return msg_len + PACKET_HEADER_SIZE;
@@ -26,7 +26,11 @@ bool Packet::unpack(uint8_t *buf)
   {
   case MSG_ID_SYNC:
     SyncMessage tmp_msg;
-    tmp_msg.unpack(&buf,PACKET_HEADER_SIZE);
+    tmp_msg.unpack(buf,PACKET_HEADER_SIZE);
     this->msg = tmp_msg;
+    return true;
+    break;
   }
+
+  return false;
 }

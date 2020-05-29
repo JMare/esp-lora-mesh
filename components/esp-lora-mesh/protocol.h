@@ -10,8 +10,17 @@
 #define MSG_ID_SYNC 0x00
 #define MSG_ID_HBT 0x01
 
+
+// Virtual class for message
+class Message {
+ public:
+  virtual int pack(uint8_t *buf, int index){return 0;};
+  virtual void unpack(uint8_t *buf, int index){};
+};
+
 // contains source and dest for entire trip
 class Packet {
+public:
   uint8_t source_id;
   uint8_t dest_id;
   uint8_t ttl;
@@ -19,17 +28,10 @@ class Packet {
   Message msg;
 
   int pack(uint8_t *buf);
-  void unpack(uint8_t *buf);
+  bool unpack(uint8_t *buf);
 };
 
-// Virtual class for message
-class Message {
- public:
-  virtual int pack(uint8_t *buf, int index);
-  virtual void unpack(uint8_t *buf, int index);
-};
-
-class SyncMessage : Message {
+class SyncMessage : public Message {
  public:
   int pack(uint8_t *buf, int index)
   {

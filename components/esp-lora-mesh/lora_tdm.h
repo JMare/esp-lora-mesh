@@ -4,9 +4,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <protocol.h>
+
 // What are we
 #define MASTER
-#define TDM_THIS_SLOT_ID 2
+#define TDM_THIS_SLOT_ID 1
 
 // Timing defines
 #define TDM_SLOT_WIDTH_MICROS 1000000 //1s
@@ -32,7 +34,6 @@ enum TDMEventType {
 
 enum TDMState {
   TDM_STATE_LISTEN, // waiting for a tdm to lock on to
-  TDM_STATE_LOCKING, // we have found a tdm schedule to lock to, but we should wait till the next slot
   TDM_STATE_TRANSMIT,
   TDM_STATE_RECEIVE
 };
@@ -42,10 +43,11 @@ void loraTDMStart();
 void loraTDMConfigureRadio();
 void loraTDMStateMachine();
 void loraTDMListen();
-void loraTDMLocking();
 void loraTDMNextSlot();
 void loraTDMReceive();
 void loraTDMTransmit();
 void loraTDMWaitForNextSlot();
+void loraTDMStartTimer(uint32_t time_to_slot_end);
+void loraTDMHandleSyncMsg(SyncMessage *msg);
 
 #endif
