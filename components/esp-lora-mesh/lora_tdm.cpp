@@ -176,6 +176,12 @@ void loraTDMReceive()
           SyncMessage msg;
           msg.unpack(buf);
           ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg.slot_number);
+          uint64_t next_alarm;
+          uint64_t now_counter;
+          timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
+          timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);
+          uint32_t our_micros_to_slot_end = next_alarm - now_counter;
+          ESP_LOGI(TAG,"Ours: %i, theirs %i",our_micros_to_slot_end,msg.micros_to_slot_end);
         }
     }
   loraIdle();
@@ -184,7 +190,32 @@ void loraTDMReceive()
 
 void loraTDMTransmit()
 {
+  vTaskDelay((TDM_SLOT_GUARD_MICROS/1000)/portTICK_PERIOD_MS);
   ESP_LOGI(TAG,"This is our TX Window, Transmitting");
+  SyncMessage msg = {};
+  msg.slot_number = TDM_THIS_SLOT_ID;
+
+  long airtime = loraCalculateAirtime(5,LORA_SF,true, 0, LORA_CR_DEN, LORA_BW);
+  uint64_t next_alarm;
+  uint64_t now_counter;
+  timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);
+  timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
+  msg.micros_to_slot_end = next_alarm - now_counter - airtime;
+
+  ESP_LOGI(TAG,"Alleged Airtime %ld",airtime);
+  uint8_t buf[LORA_MAX_MESSAGE_LEN];
+  int len = msg.pack(buf);
+
+  uint64_t startsend;
+  uint64_t endsend;
+  timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&startsend);
+  loraSendPacket(buf,len);
+  timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&endsend);
+
+  long real_airtime = endsend-startsend;
+  ESP_LOGI(TAG,"Real Airtime %lu",real_airtime);
+  loraSendPacket(buf,len);
+
   loraTDMNextSlot();
 }
 
