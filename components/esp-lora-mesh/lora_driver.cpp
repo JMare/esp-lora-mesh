@@ -11,8 +11,6 @@
 
 static const char* TAG = "LORA DRIVER";
 
-SemaphoreHandle_t _dio0Semaphore = NULL;
-
 void (*dio0_isr)(void*) = NULL;
 
 spi_host_device_t _spi_id;
@@ -56,9 +54,6 @@ int loraBegin()
     gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
     gpio_isr_handler_add(_dio0Pin, dio0_isr,NULL);
   }
-
-  _dio0Semaphore = xSemaphoreCreateBinary();
-
 
   //the bus should already be initialized by the user, so try to attach this device to it
   spi_device_interface_config_t dev = {};
