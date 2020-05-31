@@ -203,7 +203,10 @@ void loraTDMHandleSyncMsg(SyncMessage *msg)
     int slot_error = (int)our_micros_to_slot_end - (int)msg->micros_to_slot_end;
     ESP_LOGI(TAG,"TDM Error %i",slot_error);
 
-    loraTDMAdjustLock(slot_error);
+    static unsigned int sync_counter = 0;
+    sync_counter++;
+    //if(sync_counter%5==0)
+      loraTDMAdjustLock(slot_error);
   }
 }
 
@@ -214,7 +217,7 @@ void loraTDMAdjustLock(int error)
 
   uint64_t alarm;
   timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&alarm);
-  int shift = constrain(0.3*error,-50,50);
+  int shift = constrain(0.5*error,-50,50);
   alarm -= shift;
   ESP_LOGI(TAG,"Adjusting TDM Lock by %i micros",shift);
   timer_set_alarm_value(TIMER_GROUP_0,TIMER_0,alarm);
@@ -250,7 +253,7 @@ void loraTDMTransmit()
   SyncMessage msg = {};
   msg.slot_number = TDM_THIS_SLOT_ID;
 
-  long airtime = loraCalculateAirtime(5,LORA_SF,true, 0, LORA_CR_DEN, LORA_BW);
+  long airtime = loraCalculateAirtime(MSG_LEN_SYNC + PACKET_HEADER_SIZE,LORA_SF,true, 0, LORA_CR_DEN, LORA_BW);
   uint64_t next_alarm;
   uint64_t now_counter;
   timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);

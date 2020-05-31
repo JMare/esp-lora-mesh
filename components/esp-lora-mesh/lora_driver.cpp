@@ -433,20 +433,22 @@ void loraExplicitHeaderMode()
 long loraCalculateAirtime(int length, int spreadingFactor, bool explicitHeader, int lowDR, int codingRate, long bandwidth)
 {
   // TODO: Verify this with logic analyzer, could be wrong, preamble length??
-  double _length = (double)length;
-  double _spreadingFactor = (double)spreadingFactor;
-  double _explicitHeader = (double)explicitHeader;
-  double _lowDR = (double)lowDR;
-  double _codingRate = (double)codingRate;
-  double _bandwidth = (double)bandwidth;
+  //double _length = (double)length;
+  //double _spreadingFactor = (double)spreadingFactor;
+  //double _explicitHeader = (double)explicitHeader;
+  //double _lowDR = (double)lowDR;
+  //double _codingRate = (double)codingRate;
+  //double _bandwidth = (double)bandwidth;
 
-  double timePerSymbol = pow(2, _spreadingFactor)/(_bandwidth);
-  double arg = ceil(((8*_length)-(4*_spreadingFactor)+28+16-(20*(1-_explicitHeader)))/(4*(_spreadingFactor-2*_lowDR)))*(_codingRate);
-  double symbolsPerPayload=8+(fmax(arg, 0.0));
-  double timePerPayload = timePerSymbol*symbolsPerPayload;
-  double timePreamble = (8+4.25)*timePerSymbol;
+  //double timePerSymbol = pow(2, _spreadingFactor)/(_bandwidth);
+  //double arg = ceil(((8*_length)-(4*_spreadingFactor)+28+16-(20*(1-_explicitHeader)))/(4*(_spreadingFactor-2*_lowDR)))*(_codingRate);
+  //double symbolsPerPayload=8+(fmax(arg, 0.0));
+  //double timePerPayload = timePerSymbol*symbolsPerPayload;
+  //double timePreamble = (8+4.25)*timePerSymbol;
 
-  timePerPayload += 4.401/1000; // add fixed value to try to correct sync
+  //timePerPayload += 4.401/1000; // add fixed value to try to correct sync
 
-  return 1000000*(timePerPayload+timePreamble); // Convert to micros
+  //return 1000000*(timePerPayload+timePreamble); // Convert to micros
+  return 19830;
+  //return 19997;
 }
