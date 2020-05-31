@@ -156,15 +156,14 @@ void loraTDMListen()
       {
         if(tdm_event == TDM_EVENT_DIO_IRQ)
         {
-          ESP_LOGI(TAG,"Hello there");
           uint8_t buf[LORA_MAX_MESSAGE_LEN];
-          loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
+          uint8_t len = loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
           Packet pkt;
-          pkt.unpack(buf);
+          pkt.unpack(buf,len);
           if(pkt.msg_id == MSG_ID_SYNC)
           {
-            SyncMessage *_syncmsg = static_cast<SyncMessage*>(&(pkt.msg));
-            loraTDMHandleSyncMsg(_syncmsg);
+            SyncMessage msg(&pkt);
+            loraTDMHandleSyncMsg(&msg);
             break;
           }
         }
@@ -203,19 +202,19 @@ void loraTDMReceive()
       if(tdm_event == TDM_EVENT_DIO_IRQ)
         {
           uint8_t buf[LORA_MAX_MESSAGE_LEN];
-          loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
+          uint8_t len = loraReadPacket(buf,LORA_MAX_MESSAGE_LEN);
           Packet pkt;
-          pkt.unpack(buf);
+          pkt.unpack(buf,len);
           if(pkt.msg_id == MSG_ID_SYNC)
             {
-              SyncMessage *_syncmsg = static_cast<SyncMessage*>(&(pkt.msg));
-              ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",_syncmsg->slot_number);
+              SyncMessage msg(&pkt);
+              ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg.slot_number);
               uint64_t next_alarm;
               uint64_t now_counter;
               timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
               timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);
               uint32_t our_micros_to_slot_end = next_alarm - now_counter;
-              int slot_error = our_micros_to_slot_end - _syncmsg->micros_to_slot_end;
+              int slot_error = our_micros_to_slot_end - msg.micros_to_slot_end;
               ESP_LOGI(TAG,"TDM Error %i",slot_error);
             }
         }
@@ -238,7 +237,7 @@ void loraTDMTransmit()
   timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
   msg.micros_to_slot_end = next_alarm - now_counter - airtime;
 
-  pkt.msg = msg;
+  msg.pack(&pkt);
 
   uint8_t buf[LORA_MAX_PACKET_SIZE];
   int len = pkt.pack(buf);
