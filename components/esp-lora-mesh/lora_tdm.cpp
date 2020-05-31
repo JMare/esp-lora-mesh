@@ -185,11 +185,39 @@ void loraTDMHandleSyncMsg(SyncMessage *msg)
 {
   ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg->slot_number);
 
-  loraTDMStartTimer(msg->micros_to_slot_end);
+  if(tdm_state == TDM_STATE_LISTEN)
+  {
+    loraTDMStartTimer(msg->micros_to_slot_end);
+    // any sync message we rx means we must be in someone elses slot, go to rx
+    current_slot_number = msg->slot_number;
+    tdm_state = TDM_STATE_RECEIVE;
+  }
+  else
+  {
+    // Calculate the error and do something with it
+    uint64_t next_alarm;
+    uint64_t now_counter;
+    timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
+    timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);
+    uint32_t our_micros_to_slot_end = next_alarm - now_counter;
+    int slot_error = (int)our_micros_to_slot_end - (int)msg->micros_to_slot_end;
+    ESP_LOGI(TAG,"TDM Error %i",slot_error);
 
-  // any sync message we rx means we must be in someone elses slot, go to rx
-  current_slot_number = msg->slot_number;
-  tdm_state = TDM_STATE_RECEIVE;
+    loraTDMAdjustLock(slot_error);
+  }
+}
+
+void loraTDMAdjustLock(int error)
+{
+  if(error == 0)
+    return;
+
+  uint64_t alarm;
+  timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&alarm);
+  int shift = constrain(0.3*error,-50,50);
+  alarm -= shift;
+  ESP_LOGI(TAG,"Adjusting TDM Lock by %i micros",shift);
+  timer_set_alarm_value(TIMER_GROUP_0,TIMER_0,alarm);
 }
 
 void loraTDMReceive()
@@ -208,14 +236,7 @@ void loraTDMReceive()
           if(pkt.msg_id == MSG_ID_SYNC)
             {
               SyncMessage msg(&pkt);
-              ESP_LOGI(TAG,"Rx SyncMessage: Slot %u",msg.slot_number);
-              uint64_t next_alarm;
-              uint64_t now_counter;
-              timer_get_counter_value(TIMER_GROUP_0,TIMER_0,&now_counter);
-              timer_get_alarm_value(TIMER_GROUP_0,TIMER_0,&next_alarm);
-              uint32_t our_micros_to_slot_end = next_alarm - now_counter;
-              int slot_error = our_micros_to_slot_end - msg.micros_to_slot_end;
-              ESP_LOGI(TAG,"TDM Error %i",slot_error);
+              loraTDMHandleSyncMsg(&msg);
             }
         }
     }
@@ -225,7 +246,6 @@ void loraTDMReceive()
 void loraTDMTransmit()
 {
   vTaskDelay((TDM_SLOT_GUARD_MICROS/1000)/portTICK_PERIOD_MS);
-  ESP_LOGI(TAG,"This is our TX Window, Transmitting");
   Packet pkt = {};
   SyncMessage msg = {};
   msg.slot_number = TDM_THIS_SLOT_ID;
@@ -255,12 +275,10 @@ void loraTDMNextSlot()
   if(current_slot_number == TDM_THIS_SLOT_ID)
   {
     tdm_state = TDM_STATE_TRANSMIT;
-    ESP_LOGI(TAG,"TDM Tx Slot %i",current_slot_number);
   }
   else
   {
     tdm_state = TDM_STATE_RECEIVE;
-    ESP_LOGI(TAG,"TDM Rx Slot %i",current_slot_number);
   }
 }
 

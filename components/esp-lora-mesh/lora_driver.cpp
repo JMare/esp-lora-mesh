@@ -445,5 +445,8 @@ long loraCalculateAirtime(int length, int spreadingFactor, bool explicitHeader, 
   double symbolsPerPayload=8+(fmax(arg, 0.0));
   double timePerPayload = timePerSymbol*symbolsPerPayload;
   double timePreamble = (8+4.25)*timePerSymbol;
+
+  timePerPayload += 4.401/1000; // add fixed value to try to correct sync
+
   return 1000000*(timePerPayload+timePreamble); // Convert to micros
 }
