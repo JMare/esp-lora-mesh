@@ -1,6 +1,5 @@
 #include <lora_driver.h>
 #include <lora_constants.h>
-#include <lora_tdm.h>
 #include <math.h>
 
 #define BITSET(x,y) x |= (1 << y)
