@@ -31,6 +31,7 @@ void loraSleep();
 
 void loraReset();
 
+void loraClearIRQ();
 void loraSetTxPower(int level);
 void loraSetFrequency(long frequency);
 void loraSetSpreadingFactor(int sf);

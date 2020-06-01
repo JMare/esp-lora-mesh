@@ -20,6 +20,12 @@ gpio_num_t _rstPin;
 gpio_num_t _csPin;
 gpio_num_t _dio0Pin;
 
+//uint64_t time_start; uint64_t time_end;
+//void timestart(){ time_start = esp_timer_get_time();}
+//void timeend(){ time_end = esp_timer_get_time();
+//  uint64_t diff = time_end - time_start;
+//  ESP_LOGI(TAG,"Tdiff %lld",diff);}
+
 void loraSetPins(spi_host_device_t spi_id, gpio_num_t rst_pin, gpio_num_t cs_pin, gpio_num_t dio0_pin)
 {
   _spi_id = spi_id;
@@ -117,15 +123,16 @@ void loraSendPacket(uint8_t *buf, int size)
     loraWriteRegister(REG_FIFO, *buf++);
 
   loraWriteRegister(REG_PAYLOAD_LENGTH, size);
-  /*
-   * Start transmission and wait for conclusion.
-   */
+
+  loraWriteRegister(REG_DIO_MAPPING_1, 0x40); // DIO0 => TXDONE
 
   loraWriteRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_TX);
-  while((loraReadRegister(REG_IRQ_FLAGS) & IRQ_TX_DONE_MASK) == 0)
-    vTaskDelay(2);
+}
 
-  loraWriteRegister(REG_IRQ_FLAGS, IRQ_TX_DONE_MASK);
+void loraClearIRQ()
+{
+  int irq = loraReadRegister(REG_IRQ_FLAGS);
+  loraWriteRegister(REG_IRQ_FLAGS, irq);
 }
 
 int loraReadPacket(uint8_t *buf, int size)
@@ -427,22 +434,21 @@ void loraExplicitHeaderMode()
 long loraCalculateAirtime(int length, int spreadingFactor, bool explicitHeader, int lowDR, int codingRate, long bandwidth)
 {
   // TODO: Verify this with logic analyzer, could be wrong, preamble length??
-  //double _length = (double)length;
-  //double _spreadingFactor = (double)spreadingFactor;
-  //double _explicitHeader = (double)explicitHeader;
-  //double _lowDR = (double)lowDR;
-  //double _codingRate = (double)codingRate;
-  //double _bandwidth = (double)bandwidth;
+  double _length = (double)length;
+  double _spreadingFactor = (double)spreadingFactor;
+  double _explicitHeader = (double)explicitHeader;
+  double _lowDR = (double)lowDR;
+  double _codingRate = (double)codingRate;
+  double _bandwidth = (double)bandwidth;
 
-  //double timePerSymbol = pow(2, _spreadingFactor)/(_bandwidth);
-  //double arg = ceil(((8*_length)-(4*_spreadingFactor)+28+16-(20*(1-_explicitHeader)))/(4*(_spreadingFactor-2*_lowDR)))*(_codingRate);
-  //double symbolsPerPayload=8+(fmax(arg, 0.0));
-  //double timePerPayload = timePerSymbol*symbolsPerPayload;
-  //double timePreamble = (8+4.25)*timePerSymbol;
+  double timePerSymbol = pow(2, _spreadingFactor)/(_bandwidth);
+  double arg = ceil(((8*_length)-(4*_spreadingFactor)+28+16-(20*(1-_explicitHeader)))/(4*(_spreadingFactor-2*_lowDR)))*(_codingRate);
+  double symbolsPerPayload=8+(fmax(arg, 0.0));
+  double timePerPayload = timePerSymbol*symbolsPerPayload;
+  double timePreamble = (8+4.25)*timePerSymbol;
 
-  //timePerPayload += 4.401/1000; // add fixed value to try to correct sync
-
-  //return 1000000*(timePerPayload+timePreamble); // Convert to micros
-  return 19830;
-  //return 19997;
+  // No idea why 1780 is needed but it seems to be an appropriate offset to make this work
+  long airtime = 1000000*(timePerPayload+timePreamble); // Convert to micros
+  //ESP_LOGI(TAG,"Airtime %li",airtime);
+  return airtime;
 }
